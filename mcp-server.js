@@ -4,14 +4,24 @@ const {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
+const { createClient } = require("@supabase/supabase-js");
 
 const server = new Server(
   { name: "cargodash-mcp-server", version: "1.0.0" },
   { capabilities: { tools: {} } }
 );
 
-// MAKE SURE THIS IS YOUR ACTUAL LIVE RENDER URL
+// Live Render dashboard URL
 const RENDER_API_URL = "https://cargodash.onrender.com";
+
+// Supabase configuration
+const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xypwuwvtpdjgqayzmjeo.supabase.co")
+  .trim()
+  .replace(".supabase.com", ".supabase.co")
+  .replace(/\/+$/, "");
+const SUPABASE_ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_8-m1rppd0T-GhSmgo0_nVw_eL3Cx2G2").trim();
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -38,6 +48,56 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "add_shipment") {
     const { origin, destination, cargo, weight } = request.params.arguments || {};
 
+    const cleanOrigin = String(origin || "").trim();
+    const cleanDestination = String(destination || "").trim();
+    const cleanCargo = String(cargo || "").trim();
+    const cleanWeight = Number(weight);
+
+    if (!cleanOrigin || !cleanDestination || !cleanCargo || isNaN(cleanWeight)) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: "Error: Invalid shipment data. Please provide origin, destination, cargo, and numeric weight.",
+          },
+        ],
+      };
+    }
+
+    // 1. Direct Supabase insert (instant, reliable, no cold-start or proxy failure)
+    try {
+      const { data, error } = await supabase
+        .from("shipments")
+        .insert([
+          {
+            origin: cleanOrigin,
+            destination: cleanDestination,
+            cargo: cleanCargo,
+            weight: cleanWeight,
+          },
+        ])
+        .select()
+        .single();
+
+      if (!error && data) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Successfully added shipment (ID: ${data.id}) from ${cleanOrigin} to ${cleanDestination} (${cleanCargo}, ${cleanWeight} kg) to CargoDash.`,
+            },
+          ],
+        };
+      }
+      if (error) {
+        console.error("Direct Supabase insert returned error:", error);
+      }
+    } catch (supabaseErr) {
+      console.error("Direct Supabase insert exception:", supabaseErr);
+    }
+
+    // 2. HTTP Fallback to live API endpoint
     try {
       const baseUrl = (process.env.CARGODASH_API_URL || RENDER_API_URL).trim().replace(/\/+$/, "");
       const targetEndpoint = baseUrl.endsWith("/api/shipments") ? baseUrl : `${baseUrl}/api/shipments`;
@@ -46,10 +106,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          origin: String(origin).trim(),
-          destination: String(destination).trim(),
-          cargo: String(cargo).trim(),
-          weight: Number(weight),
+          origin: cleanOrigin,
+          destination: cleanDestination,
+          cargo: cleanCargo,
+          weight: cleanWeight,
         }),
       });
 
@@ -58,8 +118,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`API request failed: ${response.status} ${errorText}`);
       }
 
+      const resData = await response.json();
       return {
-        content: [{ type: "text", text: `Successfully added shipment from ${origin} to ${destination}.` }],
+        content: [
+          {
+            type: "text",
+            text: `Successfully added shipment from ${cleanOrigin} to ${cleanDestination} via API.`,
+          },
+        ],
       };
     } catch (err) {
       return {
