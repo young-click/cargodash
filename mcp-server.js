@@ -39,7 +39,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { origin, destination, cargo, weight } = request.params.arguments || {};
 
     try {
-      const response = await fetch(RENDER_API_URL, {
+      const baseUrl = (process.env.CARGODASH_API_URL || RENDER_API_URL).trim().replace(/\/+$/, "");
+      const targetEndpoint = baseUrl.endsWith("/api/shipments") ? baseUrl : `${baseUrl}/api/shipments`;
+
+      const response = await fetch(targetEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

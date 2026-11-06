@@ -1,14 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+// Fallback credentials if environment variables are not set or gitignored on Render
+const DEFAULT_SUPABASE_URL = "https://xypwuwvtpdjgqayzmjeo.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_8-m1rppd0T-GhSmgo0_nVw_eL3Cx2G2";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    "Warning: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined in environment variables."
-  );
+let rawUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL).trim();
+
+// Auto-correct common typo .supabase.com -> .supabase.co
+if (rawUrl.includes(".supabase.com")) {
+  rawUrl = rawUrl.replace(".supabase.com", ".supabase.co");
 }
+// Strip any trailing slash or accidental wrapping quotes
+rawUrl = rawUrl.replace(/^["']|["']$/g, "").replace(/\/+$/, "");
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+let rawKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY).trim();
+rawKey = rawKey.replace(/^["']|["']$/g, "");
+
+export const supabase = createClient(rawUrl, rawKey);
 
 export default supabase;

@@ -18,8 +18,9 @@ export async function GET() {
 
     return NextResponse.json(data ?? [], { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal Server Error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const errorDetails = err instanceof Error ? `${err.name}: ${err.message}${err.cause ? ` (Cause: ${(err.cause as Error).message || err.cause})` : ""}` : "Internal Server Error";
+    console.error("GET /api/shipments error:", errorDetails);
+    return NextResponse.json({ error: errorDetails }, { status: 500 });
   }
 }
 
@@ -70,7 +71,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal Server Error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const errorDetails = err instanceof Error ? `${err.name}: ${err.message}${err.cause ? ` (Cause: ${(err.cause as Error).message || err.cause})` : ""}` : "Internal Server Error";
+    console.error("POST /api/shipments error:", errorDetails);
+    return NextResponse.json({ error: errorDetails }, { status: 500 });
   }
 }
